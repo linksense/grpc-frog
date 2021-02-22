@@ -1,0 +1,16 @@
+[html]
+directory = grpc_frog_test_coverage_report
+title = grpc_frog_coverage_report
+
+[run]
+source = grpc_frog
+concurrency = multiprocessing
+
+[report]
+omit =
+    *\_version.py
+    *pb2.py
+    *pb2_grpc.py
+
+fail_under = 80
+# coverage run --source grpc_frog -m pytest & coverage combine  & coverage report
