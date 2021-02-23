@@ -106,7 +106,7 @@ class TestHello:
 
     def test_generate_client_code(self):
         # 验证语法正确
-        exec("from tests.hello_c.model_default import *")
+        exec("from tests.hello_c.model_grpc_test import *")
         exec("from tests.hello_c.servicer_grpc_test import *")
         # Client init 后发送请求
         frog.client_init("grpc://127.0.0.1:50055/hello")
