@@ -13,8 +13,8 @@ from grpc_frog import proto_type_recorder
 _servicer_text = """
 import os
 from typing import List, Dict
-from .model_{proto_name} import *
-from grpc_frog import Servicer
+from .model_{proto_name} import {models}
+from grpc_frog import Servicer, frog
 
 servicer = Servicer("{proto_name}")
 frog.add_servicer(servicer)
@@ -76,9 +76,9 @@ class PyCodeHelper:
         for proto_name in self._proto_files:
             print("start proto file:", proto_name)
             # 生成model文件
-            self._generate_models_file(proto_name)
+            models = self._generate_models_file(proto_name)
             # 生成servicer文件
-            self._generate_service_file(proto_name)
+            self._generate_service_file(proto_name, models)
         return
 
     def _generate_models_file(self, proto_name):
@@ -109,9 +109,9 @@ class PyCodeHelper:
         # 输出
         with open(os.path.join(self._package_dir, "model_{}.py".format(proto_name)), "w", encoding="utf8") as f:
             f.write(ret)
-        return
+        return modules.keys()
 
-    def _generate_service_file(self, proto_name):
+    def _generate_service_file(self, proto_name, models=[]):
         """生成接口文件"""
         with open(os.path.join(self._pb_file_dir, "{}.proto".format(proto_name)), 'r', encoding='utf8') as f:
             proto_body = f.read()
@@ -125,7 +125,8 @@ class PyCodeHelper:
             func_code = self._get_func_code(func_name, req, resp)
             func_codes += func_code + "\n\n"
 
-        out_text = _servicer_text.format(proto_name=proto_name, func_code=func_codes, package_dir=self._package_dir)
+        out_text = _servicer_text.format(proto_name=proto_name, models=", ".join(models) or "*",
+                                         func_code=func_codes, package_dir=self._package_dir)
 
         # 输出
         out_file = os.path.join(self._package_dir, "servicer_{}.py".format(proto_name))

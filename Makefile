@@ -59,7 +59,7 @@ coverage: ## check code coverage quickly with the default Python
 	coverage report -m
 	coverage html
 
-check: lint clean-test test coverage ## run all import before commit
+check: install lint clean-test coverage ## run all import before commit
 
 docs: ## generate Sphinx HTML documentation, including API docs
 	rm -f docs/grpc_frog.rst

@@ -2,7 +2,6 @@
 # encoding: utf-8
 # Created by zza on 2021/1/15 11:00
 # Copyright 2021 LinkSense Technology CO,. Ltd
-import importlib
 import os
 import re
 from typing import Dict
@@ -68,8 +67,7 @@ class Frog:
         for service_name, servicer in self.servicer_map.items():
             if not servicer.bind_method_map:
                 continue
-            _module_str = "grpc_frog.proto." + service_name + "_pb2_grpc"
-            pb2_grpc = importlib.import_module(_module_str)
+            pb2_grpc = servicer.get_pb2_grpc()
             # bp_grpc get servicer
             servicer_name = "{}Servicer".format(service_name)
             servicer_grpc = getattr(pb2_grpc, servicer_name)

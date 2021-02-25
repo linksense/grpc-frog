@@ -9,12 +9,13 @@ import os
 
 import grpc
 
+import grpc_frog.proto as proto
 from grpc_frog.context import context
 from grpc_frog.method import Method
 
 
 class Servicer:
-    proto_dir = os.path.join(os.path.dirname(__file__), "proto")  # 存放proto文件的地址
+    proto_dir = os.path.dirname(proto.__file__)  # 存放proto文件的包
 
     def __init__(self, name):
         self.name = name
@@ -23,16 +24,21 @@ class Servicer:
         self.response_extra_field_map = {}  # str:py_type
         self.handle_extra_field_callable_func = {}  # str:callable_func
 
+    @functools.lru_cache()
     def get_pb2(self):
         """获取当前servicer的pb2对象"""
-        _module_str = "grpc_frog.proto.{}_pb2".format(self.name)
-        pb2 = importlib.import_module(_module_str)
+        file_path = os.path.join(self.proto_dir, "{}_pb2.py".format(self.name))
+        spec = importlib.util.spec_from_file_location(self.name, file_path)
+        pb2 = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pb2)
         return pb2
 
     def get_pb2_grpc(self):
         """获取当前servicer的pb2_grpc对象"""
-        _module_str = "grpc_frog.proto.{}_pb2_grpc".format(self.name)
-        pb2_grpc = importlib.import_module(_module_str)
+        file_path = os.path.join(self.proto_dir, "{}_pb2_grpc.py".format(self.name))
+        spec = importlib.util.spec_from_file_location(self.name, file_path)
+        pb2_grpc = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pb2_grpc)
         return pb2_grpc
 
     def register_method(self, func, response_model=None, request_model=None):

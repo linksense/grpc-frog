@@ -6,9 +6,8 @@
 记录proto类型与python类型对应关系
 """
 import datetime
-import typing
 from collections import defaultdict
-from typing import Dict, List, Union
+from typing import Union
 
 import flask_sqlalchemy
 from google.protobuf.message import Message
@@ -159,7 +158,7 @@ def get_base_type(type_list):
         elif isinstance(py_type, dict):
             ret_type_list.update(get_base_type(py_type.values()))
             continue
-        elif issubclass(py_type, typing.List) or issubclass(py_type, typing.Dict):
+        elif str(py_type).startswith("typing.List[") or str(py_type).startswith("typing.Dict["):
             ret_type_list.update(get_base_type(py_type.__args__))
             continue
 
@@ -201,9 +200,9 @@ def annotations_to_dict(annotations):
     for k, v in annotations.items():
         if not isinstance(k, str):
             raise TypeError("annotations 的 key 必须为str")
-        if issubclass(v, List):
+        if str(v).startswith("typing.List["):
             annotations[k] = list(v.__args__)
-        elif issubclass(v, Dict):
+        elif str(v).startswith("typing.Dict["):
             annotations[k] = dict((v.__args__,))
     return annotations
 
@@ -236,6 +235,9 @@ def message_to_dict(message_obj, struct_dict: dict):
 
 def dict_to_message(return_dict: Union[dict, BaseModel], message: Message, model, servicer):
     """py_type转换成CMessage"""
+
+    if not isinstance(return_dict, dict) and not hasattr(return_dict, "dict"):
+        raise TypeError("{}对象实现错误 没有dict方法，请检查输入".format(type(return_dict)))
     if not isinstance(return_dict, dict):
         return_dict = return_dict.dict()
     struct_dict = message_collections[model]

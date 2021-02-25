@@ -20,6 +20,8 @@ class ProtoHelper:
 
     def generate_code(self):
         for servicer in self._servicer_list:
+            if not servicer.bind_method_map:
+                continue
             proto_file = os.path.join(servicer.proto_dir, servicer.name + ".proto")
             pb2_file = os.path.join(servicer.proto_dir, servicer.name + "_pb2.py")  # pb2 决定对路径
             pb2_grpc_file = os.path.join(servicer.proto_dir, servicer.name + "_pb2_grpc.py")  # pb2 grpc 绝对路径
