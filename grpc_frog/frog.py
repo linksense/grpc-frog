@@ -14,6 +14,11 @@ from grpc_frog.zk_utils import DistributedChannel
 
 
 class Frog:
+    """
+    包抽象对象
+
+    管理
+    """
     servicer_map: Dict[str, Servicer] = dict()  # servicer_name : servicer
 
     def __init__(self):
@@ -95,7 +100,7 @@ class Frog:
         :param proto_dir:
         :return:
         """
-        match_obj = re.match(r"(\w*)://([\d.]*):(\d*)/?(\w*)", uri)
+        match_obj = re.match(r"(\w*)://([\w.]*):(\d*)/?(\w*)", uri)
         if match_obj is None:
             raise ValueError("{}错误 e.g zookeeper://127.0.0.1:5000/servicer_name".format(uri))
         self.driver, self.ip, self.port, self.servicer_name = match_obj.groups()

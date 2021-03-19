@@ -22,6 +22,7 @@ def _is_port_used(ip, port):
         s.close()
     return True
 
+
 def run_grpc_server_daemon():
     from concurrent import futures
     import grpc
@@ -61,12 +62,6 @@ class TestHello:
         os.remove(os.path.join(frog.servicer_map['grpc_test'].proto_dir, "grpc_test_pb2.py"))
         os.remove(os.path.join(frog.servicer_map['grpc_test'].proto_dir, "grpc_test_pb2_grpc.py"))
         frog.set_proto_dir(cls.default_proto_path)
-
-    def setup_method(self):
-        print("setup_method")
-
-    def teardown_method(self):
-        print("teardown_method")
 
     @staticmethod
     def _get_default_args():
@@ -120,6 +115,8 @@ class TestHello:
         self._asset_response(tmp)
 
     def test_zookeeper(self):
+        if not _is_port_used("192.168.0.68", 2181):
+            return
         from grpc_frog.zk_utils import register_zk
         register_zk("127.0.0.1", 50055, "hello", "192.168.0.68", 2181)
 

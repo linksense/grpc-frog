@@ -5,6 +5,7 @@
 from __future__ import print_function
 
 from ._version import get_versions
+from .context import context
 from .frog import frog
 from .generator.proto_to_python import generate_py_code
 from .generator.python_to_proto import generate_proto_file
@@ -13,4 +14,10 @@ from .servicer import Servicer
 __version__ = get_versions()['version']
 del get_versions
 
-__all__ = ["__version__", "frog", "Servicer", "generate_py_code", "generate_proto_file"]
+__all__ = [
+    "__version__",
+    "frog", "Servicer",
+    "generate_py_code",
+    "generate_proto_file",
+    "context",
+]

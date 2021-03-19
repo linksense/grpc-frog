@@ -4,7 +4,8 @@
 
 from codecs import open
 from os import path
-from setuptools import setup, find_packages
+
+from setuptools import find_packages, setup
 
 import versioneer
 
@@ -16,14 +17,11 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as readme_file:
 with open(path.join(here, 'HISTORY.md'), encoding='utf-8') as history_file:
     history = history_file.read()
 
-requirements = [
-    # TODO: put package requirements here
-    'click',
-]
+with open(path.join(here, 'requirements.txt'), encoding='utf-8') as requirements_file:
+    requirements = requirements_file.read()
 
-test_requirements = [
-    # TODO: put package test requirements here
-]
+with open(path.join(here, 'requirements_dev.txt'), encoding='utf-8') as requirements_dev_file:
+    requirements_dev = requirements_dev_file.read()
 
 setup(
     name='grpc-frog',
@@ -35,6 +33,7 @@ setup(
     author_email='740713651@qq.com',
     url='https://github.com/AngusWG/grpc-frog',
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
+    package_data={"": ["proto/google/*/*.proto", ]},
     entry_points={
         'console_scripts': [
             'grpc-frog=grpc_frog.__main__:cli_run',
@@ -57,5 +56,5 @@ setup(
         'Programming Language :: Python :: 3.5',
     ],
     test_suite='tests',
-    tests_require=test_requirements,
+    extras_require={'dev_require': requirements + "\n" + requirements_dev},
 )
