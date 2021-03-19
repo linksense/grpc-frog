@@ -59,7 +59,7 @@ converter_reverse = {
 
 def _converter_py_type(py_type, value):
     """ 将自CMessage的数据转换成python对象  """
-    if issubclass(py_type, BaseModel):
+    if issubclass(py_type, (BaseModel, flask_sqlalchemy.model.Model)):
         obj = py_type()
         # obj 的属性结构
         struct = message_collections[py_type]
@@ -133,16 +133,21 @@ def register_py_type(model, message_name=None, to_dict_method="dict", from_orm_m
     if not hasattr(model, from_orm_method):
         raise NotImplementedError("请实现{}方法，将dict转换为model".format(from_orm_method))
     # lk特制
+    old_model = None
     if hasattr(model, "__abstract__") and model.__abstract__ and hasattr(model, "switch_table"):
+        old_model = model
         model = model.switch_table(None)
 
     message_name = message_name or model.__name__
     _py_name_2_proto_name_map[model] = message_name
-    if issubclass(model, flask_sqlalchemy.model.Model):  # 联觉自定义
-        message_collections[model] = {i.name: i.type.python_type for i in model.columns()}
-    else:  # pydantic
-        message_collections[model] = annotations_to_dict(model.__annotations__)
+
+    message_collections[model] = annotations_to_dict(model.__annotations__)
     _converter[model] = getattr(model, from_orm_method)
+
+    if old_model:
+        _converter[old_model] = getattr(model, from_orm_method)
+        _py_name_2_proto_name_map[old_model] = message_name
+        message_collections[old_model] = annotations_to_dict(model.__annotations__)
 
 
 def get_base_type(type_list):
@@ -208,7 +213,7 @@ def annotations_to_dict(annotations):
 
 
 def message_to_dict(message_obj, struct_dict: dict):
-    """将CMessages对象换成dict"""
+    """ 将CMessages对象换成dict """
     return_dict = dict()
     for name, py_type in struct_dict.items():
         value = getattr(message_obj, name)
@@ -234,8 +239,7 @@ def message_to_dict(message_obj, struct_dict: dict):
 
 
 def dict_to_message(return_dict: Union[dict, BaseModel], message: Message, model, servicer):
-    """py_type转换成CMessage"""
-
+    """ py_type转换成CMessage """
     if not isinstance(return_dict, dict) and not hasattr(return_dict, "dict"):
         raise TypeError("{}对象实现错误 没有dict方法，请检查输入".format(type(return_dict)))
     if not isinstance(return_dict, dict):
@@ -244,7 +248,7 @@ def dict_to_message(return_dict: Union[dict, BaseModel], message: Message, model
     for name, py_type in struct_dict.items():
         value = return_dict.get(name)
         struct = struct_dict[name]
-        if value is None:
+        if value is None or name not in struct_dict:
             continue
         if isinstance(struct, dict):
             # 可能没考虑到太复杂的情况
@@ -261,7 +265,9 @@ def dict_to_message(return_dict: Union[dict, BaseModel], message: Message, model
 
 def _set_message_value___obj(message, name, servicer, struct, value):
     if struct in message_collections.keys():
-        dict_to_message(value.dict(), getattr(message, name), struct, servicer)
+        if getattr(value, "dict", None):
+            value = value.dict()
+        dict_to_message(value, getattr(message, name), struct, servicer)
     else:
         converter_proto(struct, message, name, value)
 

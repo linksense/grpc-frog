@@ -8,7 +8,7 @@ import fire
 
 
 def generate_proto_file(servicer_name=None):
-    """生成proto文件
+    """ 生成proto文件
     建议不要用命令行生成，import 容易出现error
     """
     modules = []
@@ -29,7 +29,7 @@ def generate_proto_file(servicer_name=None):
 
 
 def clear_proto_cache():
-    """生成proto文件"""
+    """ 生成proto文件 """
     from grpc_frog import frog
     frog.clear_proto_cache()
 
@@ -38,13 +38,16 @@ def generate_client_code(package_dir, pb_file_dir=None):
     """ 生成client包文件
     :param package_dir: client文件生成地址
     :param pb_file_dir: pb file文件所在目录
-    :return:
     """
     from grpc_frog import generate_py_code
     generate_py_code(package_dir, pb_file_dir)
 
 
 def cli_run():
+    """
+    默认函数 触发fire包
+    https://github.com/google/python-fire
+    """
     fire.Fire()
 
 

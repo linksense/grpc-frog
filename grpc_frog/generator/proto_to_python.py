@@ -164,11 +164,13 @@ class PyCodeHelper:
                 _key = _get_type(_type_key)
                 _value = _get_type(_type_value)
                 ret_params.append("{}: Dict[{}, {}] = {}()".format(_name, _key, _value, "dict"))
-            else:
+            elif field:
                 _type, _name, *_ = field.split()
                 _type_text = _get_type(_type)
                 _default_value = proto_type_recorder.get_py_default_value(_type_text)
                 ret_params.append("{}: {} = {}()".format(_name, _type_text, _default_value))
+            else:  # field = ""
+                print("[warming] 空 message: {} ".format(proto.replace("\n", '')))
         return ret_params, unknown_py_type
 
     def _get_func_code(self, func_name, req, resp):

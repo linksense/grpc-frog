@@ -15,6 +15,16 @@ from grpc_frog.method import Method
 
 
 class Servicer:
+    """
+    Servicer:
+      * 一个servicer 对应一个 proto 文件
+      * 为grpc的一级路由管理 (类似flask blue print)
+
+
+    servicer_name = aaa
+    method_name = bbb
+    生成的路由则为 aaa/bbb
+    """
     proto_dir = os.path.dirname(proto.__file__)  # 存放proto文件的包
 
     def __init__(self, name):
@@ -23,18 +33,20 @@ class Servicer:
         self.request_extra_field_map = {}  # str:py_type
         self.response_extra_field_map = {}  # str:py_type
         self.handle_extra_field_callable_func = {}  # str:callable_func
+        self._pb2_grpc = None
 
     @functools.lru_cache()
     def get_pb2(self):
-        """获取当前servicer的pb2对象"""
+        """ 获取当前servicer的pb2对象 """
         file_path = os.path.join(self.proto_dir, "{}_pb2.py".format(self.name))
         spec = importlib.util.spec_from_file_location(self.name, file_path)
         pb2 = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(pb2)
         return pb2
 
+    @functools.lru_cache()
     def get_pb2_grpc(self):
-        """获取当前servicer的pb2_grpc对象"""
+        """ 获取当前servicer的pb2_grpc对象 """
         file_path = os.path.join(self.proto_dir, "{}_pb2_grpc.py".format(self.name))
         spec = importlib.util.spec_from_file_location(self.name, file_path)
         pb2_grpc = importlib.util.module_from_spec(spec)
@@ -42,21 +54,24 @@ class Servicer:
         return pb2_grpc
 
     def register_method(self, func, response_model=None, request_model=None):
-        """给当前服务注册一个方法"""
+        """ 给当前服务注册一个方法 """
         _m = Method(func, self, response_model, request_model)
         self.bind_method_map[_m.name] = _m
         return _m
 
     def add_request_extra_field(self, field_name: str, field_py_type: type):
-        """增加method请求体体默认参数"""
+        """ 增加method请求体体默认参数 """
         self.request_extra_field_map[field_name] = field_py_type
 
     def add_response_extra_field(self, field_name: str, field_py_type: type):
-        """增加method响应体的默认参数"""
+        """ 增加method响应体的默认参数 """
         self.response_extra_field_map[field_name] = field_py_type
 
     def grpc_method(self, *args, **kwargs):
-        """注册一个method"""
+        """
+        注册一个method
+        server用
+        """
 
         # 第一层 获取参数
         def _record_method(func):
@@ -75,8 +90,6 @@ class Servicer:
                 func_ret = func(**kw_args)
                 # 将函数返回值(model)转换成CMessage
                 ret = _m.response_ret_2_message(func_ret)
-                # 释放全局
-                context.clear()
                 return ret
 
             self.register_method(wrapper, *args, **kwargs)
@@ -85,16 +98,20 @@ class Servicer:
         return _record_method
 
     def _handle_extra_fields(self, kw_args: dict):
-        """过滤掉额外的字段 触发hook函数"""
+        """ 过滤掉额外的字段 触发hook函数 """
         for field_name in self.request_extra_field_map.keys():
             value = kw_args.pop(field_name)
             self.handle_extra_field_callable_func[field_name](value)
 
     def register_handle_extra_field_callable_func(self, field_name, callable_func):
+        """ 注册额外字段的回调函数 """
         self.handle_extra_field_callable_func[field_name] = callable_func
 
     def remote_method(self, *args, **kwargs):
-        """记录可以远程调用的method"""
+        """
+        记录可以远程调用的method
+        client用
+        """
 
         # 第一层 获取参数
         def _record_method(func):
@@ -115,7 +132,6 @@ class Servicer:
                     remote_result = getattr(self._stub, func.__name__)(message)
                 # 将CMessage转换成dict 并装填到response_model中
                 res_obj = _m.response_model(**_m.response_message_2_dict(remote_result))
-                context.clear()
                 return res_obj
 
             self.register_method(wrapper, *args, **kwargs)
