@@ -6,12 +6,14 @@ import functools
 import importlib
 import inspect
 import os
+import re
 
 import grpc
 
 import grpc_frog.proto as proto
 from grpc_frog.context import context
 from grpc_frog.method import Method
+from grpc_frog.zk_utils import DistributedChannel
 
 
 class Servicer:
@@ -25,15 +27,26 @@ class Servicer:
     method_name = bbb
     生成的路由则为 aaa/bbb
     """
-    proto_dir = os.path.dirname(proto.__file__)  # 存放proto文件的包
 
-    def __init__(self, name):
+    def __init__(self, name, proto_dir=None):
+        """
+        初始化
+
+        :param name: servicer 名称 也是 client_init 连接后缀
+        :param proto_dir: proto文件存放地址
+        """
         self.name = name
         self.bind_method_map = {}  # str:function
         self.request_extra_field_map = {}  # str:py_type
         self.response_extra_field_map = {}  # str:py_type
         self.handle_extra_field_callable_func = {}  # str:callable_func
         self._pb2_grpc = None
+
+        self._channel = None  # 作为client端时 获取连接地址的数据
+        self._driver = None  # 判断_channel类型用
+
+        if proto_dir is None:
+            self.proto_dir = os.path.dirname(proto.__file__)
 
     @functools.lru_cache()
     def get_pb2(self):
@@ -119,14 +132,13 @@ class Servicer:
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
                 # 第三层 处理Input Output
-                from grpc_frog import frog
                 _m = self.bind_method_map[func.__name__]
                 # 将函数参数转换成CMessage
                 sig = inspect.signature(func)
                 bound_values = sig.bind(*args, **kwargs)
                 message = _m.request_ret_2_message(dict(**bound_values.arguments))
                 # 远程调用函数
-                with grpc.insecure_channel(frog.channel_url) as channel:
+                with grpc.insecure_channel(self.channel_url) as channel:
                     self._stub = getattr(self.get_pb2_grpc(), "{}Stub".format(self.name))(channel)
                     context.fill(_m, message, _m.request_model, _m.response_ret_2_message, self._stub)
                     remote_result = getattr(self._stub, func.__name__)(message)
@@ -142,3 +154,27 @@ class Servicer:
     def get_pb2_message(self, message_name):
         """获取CMessages对象"""
         return getattr(self.get_pb2(), message_name)
+
+    @property
+    def channel_url(self):
+        """获取 channel"""
+        if self._driver == "grpc":
+            return self._channel
+        else:  # self.driver == "zookeeper":
+            server = self._channel.get_server()
+            _uri = "{}:{}".format(server.get("host"), server.get("port"))
+            return _uri
+
+    def client_init(self, uri, proto_dir=None):
+        """ servicer作为客户端初始化"""
+        match_obj = re.match(r"(\w*)://([\w.]*):(\d*)/?(\w*)", uri)
+        self._driver, ip, port, servicer_name = match_obj.groups()
+        if self._driver == "grpc":
+            self._channel = '{}:{}'.format(ip, port)
+        elif self._driver == "zookeeper":
+            self._channel = DistributedChannel(ip, port, servicer_name)
+        else:
+            raise ValueError("driver 错误 请选择 [grpc|zookeeper]")
+
+        if proto_dir is not None:
+            self.proto_dir = proto_dir

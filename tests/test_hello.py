@@ -8,8 +8,10 @@ import socket
 import time
 from typing import Dict, Union
 
-from grpc_frog import Servicer, frog, generate_proto_file, generate_py_code
-from tests.hello_d.interface import ResponseModel, echo_with_increment_one
+import grpc
+
+from grpc_frog import frog, generate_proto_file, generate_py_code
+from tests.hello_d.interface import ResponseModel, echo_with_increment_one, test_servicer
 
 
 def _is_port_used(ip, port):
@@ -25,9 +27,9 @@ def _is_port_used(ip, port):
 
 def run_grpc_server_daemon():
     from concurrent import futures
-    import grpc
+
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=2), )
-    frog.bind_servicer(server)
+    frog.bind_servicer(server, test_servicer)
     server.add_insecure_port('{}:{}'.format("127.0.0.1", 50055))
     server.start()
     server.wait_for_termination()
@@ -36,7 +38,6 @@ def run_grpc_server_daemon():
 class TestHello:
     server_daemon = None
     server_name = "test_hello"
-    default_proto_path = Servicer.proto_dir
 
     @classmethod
     def setup_class(cls):
@@ -61,7 +62,6 @@ class TestHello:
         os.remove(os.path.join(frog.servicer_map['grpc_test'].proto_dir, "grpc_test.proto"))
         os.remove(os.path.join(frog.servicer_map['grpc_test'].proto_dir, "grpc_test_pb2.py"))
         os.remove(os.path.join(frog.servicer_map['grpc_test'].proto_dir, "grpc_test_pb2_grpc.py"))
-        frog.set_proto_dir(cls.default_proto_path)
 
     @staticmethod
     def _get_default_args():
@@ -104,7 +104,8 @@ class TestHello:
         exec("from tests.hello_c.model_grpc_test import *")
         exec("from tests.hello_c.servicer_grpc_test import *")
         # Client init 后发送请求
-        frog.client_init("grpc://127.0.0.1:50055/hello")
+        import tests.hello_c.proto as proto
+        frog.client_init("grpc://127.0.0.1:50055/grpc_test", proto_dir=os.path.dirname(proto.__file__))
         from tests.hello_c.servicer_grpc_test import echo_with_increment_one
         args = self._get_default_args()
         # 测试直接调用函数echo_with_increment_one
@@ -118,10 +119,9 @@ class TestHello:
         if not _is_port_used("192.168.0.68", 2181):
             return
         from grpc_frog.zk_utils import register_zk
-        register_zk("127.0.0.1", 50055, "hello", "192.168.0.68", 2181)
-
-        frog.client_init("zookeeper://192.168.0.68:2181/hello")
         from tests.hello_c.servicer_grpc_test import echo_with_increment_one
+        register_zk("127.0.0.1", 50055, "grpc_test", "192.168.0.68", 2181)
+        frog.client_init("zookeeper://192.168.0.68:2181/grpc_test")
         res = echo_with_increment_one()
         # BaseModel.dict 会导致
         tmp = res.dict()
