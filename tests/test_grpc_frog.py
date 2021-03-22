@@ -39,8 +39,11 @@ class TestGrpc_frog:
     def test_bind_server(self):
         from concurrent import futures
         import grpc
+
+        from tests.hello_d.interface import test_servicer
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=2))
-        frog.bind_servicer(server)
+        frog.bind_servicer(server, test_servicer)
+
         server.add_insecure_port('{}:{}'.format("127.0.0.1", 50055))
         server.start()
         server.stop(None)
