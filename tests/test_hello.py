@@ -86,9 +86,11 @@ class TestHello:
 
     def test_server_daemon(self):
         """测试生成proto"""
+        from grpc_frog import proto
+        frog.servicer_map['grpc_test'].proto_dir = os.path.dirname(proto.__file__)
         pb2 = frog.servicer_map['grpc_test'].get_pb2()
         pb2_grpc = frog.servicer_map['grpc_test'].get_pb2_grpc()
-        assert hasattr(pb2_grpc, "grpc_test")
+        assert hasattr(pb2_grpc, "grpc__test__pb2")
         assert hasattr(pb2_grpc, "grpc_testStub")
         assert hasattr(pb2_grpc, "grpc_testServicer")
         assert hasattr(pb2, "TDemoModel")

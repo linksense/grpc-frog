@@ -29,7 +29,7 @@ class TestGrpc_frog:
         from tests.hello_d.interface import TDemoModel, echo_with_increment_one
         generate_proto_file(save_dir=".")
         file_list = ["grpc_test.proto", "grpc_test_pb2.py", "grpc_test_pb2_grpc.py"]
-        dir_list = [frog.servicer_map['grpc_test'].proto_dir, "."]
+        dir_list = [frog.servicer_map['grpc_test'].proto_dir]
         for dir_path in dir_list:
             for file in file_list:
                 file_path = os.path.join(dir_path, file)

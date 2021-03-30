@@ -7,7 +7,6 @@ import re
 from typing import Dict
 
 import grpc
-
 from grpc_frog import proto_type_recorder
 from grpc_frog.servicer import Servicer
 
@@ -20,9 +19,7 @@ class Frog:
     """
     servicer_map: Dict[str, Servicer] = dict()  # servicer_name : servicer
     _uri_map = {}  # servicer_name : uri
-
-    def __init__(self):
-        ...
+    channel_options = []  # grpc channel_options
 
     def add_servicer(self, servicer: Servicer):
         """绑定servicer"""
@@ -86,15 +83,14 @@ class Frog:
         """
         client端初始化用
         :param uri: eg. grpc://127.0.0.1:5000 zookeeper://127.0.0.1:5000/servicer_name
-        :param proto_dir:
-        :return:
+        :param proto_dir: servicer所使用的proto文件
         """
         match_obj = re.match(r"(\w*)://([\w.]*):(\d*)/?(\w*)", uri)
         if match_obj is None:
             raise ValueError("{}错误 e.g zookeeper://127.0.0.1:5000/servicer_name".format(uri))
         *_, servicer_name = match_obj.groups()
         if servicer_name not in self.servicer_map.keys():
-            raise ValueError("{}未在frog中注册,当前已组测服务为{}".format(servicer_name, self.servicer_map.keys()))
+            raise ValueError("{}未在frog中注册,当前已组测服务为{}".format(servicer_name or "None", self.servicer_map.keys()))
         self._uri_map[servicer_name] = uri
         self.servicer_map[servicer_name].client_init(uri, proto_dir)
 
@@ -102,6 +98,23 @@ class Frog:
         if servicer_name not in self.servicer_map.keys():
             self.servicer_map[servicer_name] = Servicer(servicer_name)
         return self.servicer_map[servicer_name]
+
+    def get_servicer_uri(self, servicer_name):
+        """ 通过服务名称获取连接的uri """
+        if servicer_name not in self._uri_map:
+            raise KeyError("未初始化 {} client".format(servicer_name))
+        return self._uri_map[servicer_name]
+
+    def set_channel_options(self, options: list):
+        self.channel_options += options
+
+    def get_channel_options(self):
+        grpc_max_length = os.environ.get('grpc_frog__grpc_max_length') or 512 * 1024 * 1024
+        options = [
+            ('grpc.max_send_message_length', grpc_max_length),
+            ('grpc.max_receive_message_length', grpc_max_length),
+        ]
+        return options + self.channel_options
 
 
 frog = Frog()
