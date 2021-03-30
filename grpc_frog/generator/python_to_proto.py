@@ -5,11 +5,10 @@
 import os
 import shutil
 
+from grpc_frog import frog, proto_type_recorder
 from grpc_tools import protoc
 
-from grpc_frog import frog, proto_type_recorder
-
-proto_text = """syntax = "proto3";\nimport "google/protobuf/timestamp.proto";\n{}\n\n{}"""
+proto_text = """syntax = "proto3";\n\npackage {};\n\nimport "google/protobuf/timestamp.proto";\n\n{}\n\n{}"""
 service_text = "service {name} {{\n  {method_str}\n}}"
 
 
@@ -39,17 +38,22 @@ class ProtoHelper:
         method_str = self.get_message_body(servicer)
         _proto_str = "service {name} {{\n  {method_str}\n}}".format(name=servicer.name, method_str=method_str)
         messages = "\n\n".join([proto_type_recorder.translate_2_proto_message(i) for i in required_message_type])
-        text = proto_text.format(messages, _proto_str)
+        text = proto_text.format(servicer.name, messages, _proto_str)
         # save
         with open(proto_file, "w", encoding="utf8") as f:
             f.write(text)
-        if self._save_dir:
-            shutil.copyfile(proto_file, os.path.join(self._save_dir, servicer.name + ".proto"))
         # 生成pb2文件
         self._generate_pb2_file(servicer, proto_file, pb2_file, pb2_grpc_file)
 
     def _generate_pb2_file(self, servicer, proto_file, pb2_file, pb2_grpc_file):
         """生成pb文件"""
+        # copy google dir
+        google_dir = os.path.join(servicer.proto_dir, "google")
+        if not os.path.exists(google_dir):
+            import grpc_frog
+            frog_google_dir = os.path.join(os.path.dirname(grpc_frog.__file__), "proto", "google")
+            shutil.copytree(frog_google_dir, google_dir)
+
         protoc_result = protoc.main(
             (
                 '',
@@ -63,13 +67,10 @@ class ProtoHelper:
             raise SyntaxError("编译{}下的文件时产生了一个错误".format(servicer.proto_dir))
         file_data = open(pb2_grpc_file, "r", encoding="utf8").read()
         file_data = file_data.replace("import {}".format(servicer.name),
-                                      "from grpc_frog.proto import {}".format(servicer.name))
+                                      "# todo need changed to your proto\nfrom grpc_frog.proto import {}".format(
+                                          servicer.name))
         with open(pb2_grpc_file, "w", encoding="utf8") as f:
             f.write(file_data)
-
-        if self._save_dir:
-            shutil.copyfile(pb2_file, os.path.join(self._save_dir, servicer.name + "_pb2.py"))
-            shutil.copyfile(pb2_grpc_file, os.path.join(self._save_dir, servicer.name + "_pb2_grpc.py"))
 
     @staticmethod
     def get_message_body(servicer):

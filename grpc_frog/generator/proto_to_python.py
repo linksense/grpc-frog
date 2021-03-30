@@ -15,8 +15,9 @@ import os
 from typing import List, Dict
 from .model_{proto_name} import {models}
 from grpc_frog import Servicer, frog
+from . import proto
 
-servicer = Servicer("{proto_name}")
+servicer = Servicer("{proto_name}", proto_dir=os.path.dirname(proto.__file__))
 frog.add_servicer(servicer)
 
 

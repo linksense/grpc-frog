@@ -17,6 +17,7 @@ from grpc_frog.zk_utils import DistributedChannel
 
 
 class Servicer:
+    servicer_cache = {}
     """
     Servicer:
       * 一个servicer 对应一个 proto 文件
@@ -46,7 +47,8 @@ class Servicer:
         self._driver = None  # 判断_channel类型用
 
         if proto_dir is None:
-            self.proto_dir = os.path.dirname(proto.__file__)
+            proto_dir = os.path.dirname(proto.__file__)
+        self.proto_dir = proto_dir
 
     @functools.lru_cache()
     def get_pb2(self):
@@ -138,7 +140,8 @@ class Servicer:
                 bound_values = sig.bind(*args, **kwargs)
                 message = _m.request_ret_2_message(dict(**bound_values.arguments))
                 # 远程调用函数
-                with grpc.insecure_channel(self.channel_url) as channel:
+
+                with grpc.insecure_channel(self.channel_url, options=self.get_channel_options()) as channel:
                     self._stub = getattr(self.get_pb2_grpc(), "{}Stub".format(self.name))(channel)
                     context.fill(_m, message, _m.request_model, _m.response_ret_2_message, self._stub)
                     remote_result = getattr(self._stub, func.__name__)(message)
@@ -158,12 +161,18 @@ class Servicer:
     @property
     def channel_url(self):
         """获取 channel"""
+        if self._driver is None:
+            from grpc_frog import frog
+            self.client_init(frog.get_servicer_uri(self.name))
+
         if self._driver == "grpc":
             return self._channel
-        else:  # self.driver == "zookeeper":
+        elif self._driver == "zookeeper":
             server = self._channel.get_server()
             _uri = "{}:{}".format(server.get("host"), server.get("port"))
             return _uri
+        else:
+            raise ValueError("No dirver match to {}".format(self._driver))
 
     def client_init(self, uri, proto_dir=None):
         """ servicer作为客户端初始化"""
@@ -178,3 +187,8 @@ class Servicer:
 
         if proto_dir is not None:
             self.proto_dir = proto_dir
+
+    @functools.lru_cache()
+    def get_channel_options(self):
+        from grpc_frog import frog
+        return frog.get_channel_options()
