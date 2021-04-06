@@ -1,5 +1,5 @@
 pydantic == 1.8.1
-Flask_SQLAlchemy == 2.4.0
+Flask_SQLAlchemy == 2.3.2
 grpcio == 1.36.1
 grpcio_tools == 1.9.1
 fire == 0.2.1
