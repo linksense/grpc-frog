@@ -1,8 +1,8 @@
-pydantic == 1.8.1
-Flask_SQLAlchemy == 2.3.2
-grpcio == 1.36.1
-grpcio_tools == 1.9.1
-fire == 0.2.1
-kazoo == 2.8.0
-python-dateutil == 2.8.1
-protobuf == 3.15.6
+pydantic
+Flask_SQLAlchemy
+grpcio
+grpcio_tools
+fire
+kazoo
+python-dateutil
+protobuf
