@@ -5,17 +5,20 @@
 import os
 import shutil
 
-from grpc_frog import frog, proto_type_recorder
 from grpc_tools import protoc
+
+from grpc_frog import frog, proto_type_recorder
 
 proto_text = """syntax = "proto3";\n\npackage {};\n\nimport "google/protobuf/timestamp.proto";\n\n{}\n\n{}"""
 service_text = "service {name} {{\n  {method_str}\n}}"
 
 
 class ProtoHelper:
-    def __init__(self, servicer_name=None, save_dir=None):
+    def __init__(self, servicer_name=None, save_dir=None, proto_location=None):
+
         self._servicer_list = (frog.servicer_map[servicer_name],) if servicer_name else frog.servicer_map.values()
         self._save_dir = save_dir
+        self._proto_location = proto_location or "grpc_frog.proto"
 
     def generate_code(self):
         for servicer in self._servicer_list:
@@ -66,9 +69,10 @@ class ProtoHelper:
         if protoc_result == 1:
             raise SyntaxError("编译{}下的文件时产生了一个错误".format(servicer.proto_dir))
         file_data = open(pb2_grpc_file, "r", encoding="utf8").read()
-        file_data = file_data.replace("import {}".format(servicer.name),
-                                      "# todo need changed to your proto\nfrom grpc_frog.proto import {}".format(
-                                          servicer.name))
+        file_data = file_data.replace("\nimport {}".format(servicer.name),
+                                      "\n# todo need changed to your proto"
+                                      "\nfrom {} import {}".format(self._proto_location,
+                                                                   servicer.name))
         with open(pb2_grpc_file, "w", encoding="utf8") as f:
             f.write(file_data)
 
@@ -81,6 +85,6 @@ class ProtoHelper:
         return "\n  ".join(ret)
 
 
-def generate_proto_file(servicer_name=None, save_dir=None):
+def generate_proto_file(servicer_name=None, save_dir=None, proto_location=None):
     """生成proto文件"""
-    ProtoHelper(servicer_name=servicer_name, save_dir=save_dir).generate_code()
+    ProtoHelper(servicer_name=servicer_name, save_dir=save_dir, proto_location=proto_location).generate_code()

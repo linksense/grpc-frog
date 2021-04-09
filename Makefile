@@ -59,7 +59,7 @@ coverage: ## check code coverage quickly with the default Python
 	coverage report -m
 	coverage html
 
-check: install lint clean-test coverage ## run all import before commit
+check: install lint clean-test coverage clean ## run all import before commit
 
 docs: ## generate Sphinx HTML documentation, including API docs
 	rm -f docs/grpc_frog.rst
@@ -81,7 +81,7 @@ dist: clean ## builds source and wheel package
 	ls -l dist
 
 install: clean ## install the package to the active Python's site-packages
-	python setup.py install
+	pip install -e .[dev_require]
 
 requirements: ## make requirements.txt
 	pip install pipreqs  -i https://pypi.douban.com/simple/
