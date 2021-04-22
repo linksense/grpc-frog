@@ -176,7 +176,7 @@ class PyCodeHelper:
 
     def _get_func_code(self, func_name, req, resp):
         if self._use_for == "client":
-            func_code = """@servicer.remote_method({})\ndef {}({}) -> {}:\n    ...\n"""
+            func_code = """@servicer.remote_method({})\ndef {}({}) -> {}:\n    ...  # pragma: no cover\n"""
         else:
             func_code = """@servicer.grpc_method({})\ndef {}({}) -> {}:\n    raise NotImplementedError\n"""
         return func_code.format(resp, func_name, ", ".join(req), resp)
