@@ -46,6 +46,7 @@ clean-test: ## remove test and coverage artifacts
 	rm -f .coverage
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
+	rm -fr _coverage_report
 
 lint: ## check style with flake8
 	flake8 grpc_frog tests
