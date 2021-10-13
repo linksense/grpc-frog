@@ -9,6 +9,7 @@ concurrency = multiprocessing
 [report]
 omit =
     *\_version.py
+    */_version.py
     *pb2.py
     *pb2_grpc.py
 

@@ -8,7 +8,8 @@ import re
 from distutils.dir_util import copy_tree
 
 import grpc_frog.template.model as model
-from grpc_frog import proto_type_recorder
+from grpc_frog.core import proto_type_recorder
+from grpc_frog.core.proto_type_recorder import proto_base_type
 
 _servicer_text = """
 import os
@@ -32,15 +33,9 @@ frog.add_servicer(servicer)
 
 
 class PyCodeHelper:
-    mapping = {
-        "int64": "int",
-        "string": "str",
-        "bool": "bool",
-        "float": "float",
-        "google.protobuf.Timestamp": "datetime.datetime",
-    }
+    mapping = {v: k for k, v in proto_base_type.items()}
 
-    def __init__(self, package_dir, pb_file_dir, use_for="client"):
+    def __init__(self, package_dir: str, pb_file_dir: str, use_for: str = "client"):
         """python生成助手
         :param package_dir: 生成的代码地址
         :param pb_file_dir: 目前pb.py和pb2_grpc的存放地址
@@ -82,7 +77,7 @@ class PyCodeHelper:
             self._generate_service_file(proto_name, models)
         return
 
-    def _generate_models_file(self, proto_name):
+    def _generate_models_file(self, proto_name: str):
         """生成model文件"""
         modules = {}
         relationship = dict()  # 类名 : [依赖类1,依赖类2]
@@ -164,7 +159,7 @@ class PyCodeHelper:
         转换成python代码
         """
         unknown_py_type = []
-        field_list = proto[proto.find("{") + 1 : proto.rfind(";")].split(";")
+        field_list = proto[proto.find("{") + 1: proto.rfind(";")].split(";")
 
         def _get_type(message_type):
             """获取CMessages对应的python类型，并记录自定义类型"""

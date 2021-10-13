@@ -7,7 +7,7 @@
 """
 import datetime
 from collections import defaultdict
-from typing import Union
+from typing import Type, Union
 
 import flask_sqlalchemy
 from google.protobuf.message import Message
@@ -103,7 +103,7 @@ def converter_proto(py_type, message, name, value):
     return message
 
 
-def translate_2_proto_field(type_field):
+def translate_2_proto_field(type_field: Type):
     """将py_type参数转换成proto字符串"""
     if isinstance(type_field, list):
         return "repeated {}".format(translate_2_proto_field(type_field[0]))

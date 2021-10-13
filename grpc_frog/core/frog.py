@@ -8,8 +8,8 @@ from typing import Dict
 
 import grpc
 
-from grpc_frog import proto_type_recorder
-from grpc_frog.servicer import Servicer
+from grpc_frog.core import proto_type_recorder
+from grpc_frog.core.servicer import Servicer
 
 
 class Frog:
@@ -75,7 +75,7 @@ class Frog:
 
     def clear_proto_cache(self):
         """清空 .proto 和 pb2 文件缓存"""
-        dir_path = os.path.join(os.path.dirname(__file__), "proto")
+        dir_path = os.path.join(os.path.dirname(__file__), "../proto")
         file_list = os.listdir(dir_path)
         for i in file_list:
             if (i.endswith(".py") or i.endswith(".proto")) and (i != "__init__.py"):
@@ -129,4 +129,4 @@ class Frog:
 
 frog = Frog()
 
-__all__ = ["frog"]
+__all__ = [frog]

@@ -11,11 +11,7 @@ from typing import Dict, Union
 import grpc
 
 from grpc_frog import frog, generate_proto_file, generate_py_code
-from tests.hello_d.interface import (
-    ResponseModel,
-    echo_with_increment_one,
-    test_servicer,
-)
+from tests.hello_d.interface import ResponseModel, echo_with_increment_one, service_d
 
 
 def _is_port_used(ip, port):
@@ -35,7 +31,7 @@ def run_grpc_server_daemon():
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=2),
     )
-    frog.bind_servicer(server, test_servicer)
+    frog.bind_servicer(server, service_d)
     server.add_insecure_port("{}:{}".format("127.0.0.1", 50055))
     server.start()
     server.wait_for_termination()

@@ -3,7 +3,7 @@
 # Created by zza on 2021/1/19 18:25
 # Copyright 2021 LinkSense Technology CO,. Ltd
 
-from grpc_frog import proto_type_recorder
+from grpc_frog.core import proto_type_recorder
 
 
 class Method:

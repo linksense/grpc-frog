@@ -7,7 +7,7 @@ import os
 import fire
 
 
-def generate_proto_file(servicer_name=None):
+def generate_proto_file(servicer_name: str = None) -> None:
     """生成proto文件
     建议不要用命令行生成，import 容易出现error
     """
@@ -29,14 +29,14 @@ def generate_proto_file(servicer_name=None):
     _generate_proto_file(servicer_name)
 
 
-def clear_proto_cache():
+def clear_proto_cache() -> None:
     """ 生成proto文件 """
     from grpc_frog import frog
 
     frog.clear_proto_cache()
 
 
-def generate_client_code(package_dir, pb_file_dir=None):
+def generate_client_code(package_dir: str, pb_file_dir: str = None) -> None:
     """生成client包文件
     :param package_dir: client文件生成地址
     :param pb_file_dir: pb file文件所在目录
@@ -46,13 +46,14 @@ def generate_client_code(package_dir, pb_file_dir=None):
     generate_py_code(package_dir, pb_file_dir)
 
 
-def cli_run():
+def entry_point() -> None:  # pragma: no cover
     """
     默认函数 触发fire包
     https://github.com/google/python-fire
     """
+    fire.core.Display = lambda lines, out: print(*lines, file=out)
     fire.Fire()
 
 
 if __name__ == "__main__":
-    cli_run()
+    entry_point()

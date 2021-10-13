@@ -11,8 +11,8 @@ import re
 import grpc
 
 import grpc_frog.proto as proto
-from grpc_frog.context import context
-from grpc_frog.method import Method
+from grpc_frog.core.context import context
+from grpc_frog.core.method import Method
 from grpc_frog.zk_utils import DistributedChannel
 
 
