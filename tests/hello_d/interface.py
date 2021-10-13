@@ -65,9 +65,13 @@ def echo_with_increment_one_base(request_model: ResponseModel) -> ResponseModel:
 
 
 @test_servicer.grpc_method(response_model=ResponseModel)
-def echo_with_increment_one(int_a: int, float_b: float, string_c: str,
-                            repeated_model_d: List[TDemoModel],
-                            map_model_e: Dict[str, int]) -> dict:
+def echo_with_increment_one(
+    int_a: int,
+    float_b: float,
+    string_c: str,
+    repeated_model_d: List[TDemoModel],
+    map_model_e: Dict[str, int],
+) -> dict:
     int_a += 1
     float_b += 1
     string_c += "1"

@@ -11,12 +11,13 @@ from .generator.proto_to_python import generate_py_code
 from .generator.python_to_proto import generate_proto_file
 from .servicer import Servicer
 
-__version__ = get_versions()['version']
+__version__ = get_versions()["version"]
 del get_versions
 
 __all__ = [
     "__version__",
-    "frog", "Servicer",
+    "frog",
+    "Servicer",
     "generate_py_code",
     "generate_proto_file",
     "context",
