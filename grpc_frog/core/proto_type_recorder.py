@@ -73,10 +73,14 @@ def _converter_py_type(py_type, value):
 
             if isinstance(attr_type, list):
                 # eg. attr_type == [float]
+                if getattr(obj, attr_name) is None:
+                    setattr(obj, attr_name, list())
                 for _v in message_value:
                     getattr(obj, attr_name).append(_converter_py_type(attr_type[0], _v))
             elif isinstance(attr_type, dict):
                 # eg. attr_type = {str, str} _k_type = str, _v_type =str
+                if getattr(obj, attr_name) is None:
+                    setattr(obj, attr_name, dict())
                 (_k_type, _v_type), *_ = list(attr_type.items())
                 for _k, _v in message_value.items():
                     key_obj = _converter_py_type(_k_type, _k)

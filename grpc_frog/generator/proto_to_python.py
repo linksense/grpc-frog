@@ -27,7 +27,6 @@ frog.add_servicer(servicer)
 
 {func_code}
 def init_client() -> None:  # pragma: no cover
-    proto_dir = os.path.join(r"{package_dir}", "proto")
     frog.client_init("grpc://127.0.0.1:50065", proto_dir=proto_dir)
 
 
@@ -35,7 +34,6 @@ def init_server() -> None:  # pragma: no cover
     import grpc
     from concurrent import futures
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=2))
-    proto_dir = os.path.join(r"{package_dir}", "proto")
     frog.bind_servicer(server, proto_dir=proto_dir)
 """
 
@@ -155,14 +153,16 @@ class PyCodeHelper:
             f.write(format_code)
         return
 
-    def _get_struct_from_proto(self, proto: str) -> Tuple[List[str], List[str]]:
+    def _get_struct_from_proto(
+        self, proto: str, function_args: bool = False
+    ) -> Tuple[List[str], List[str]]:
         """
         将proto文件的message
         field
         转换成python代码
         """
         unknown_py_type = []
-        field_list = proto[proto.find("{") + 1: proto.rfind(";")].split(";")
+        field_list = proto[proto.find("{") + 1 : proto.rfind(";")].split(";")
 
         def _get_type(message_type):
             """获取CMessages对应的python类型，并记录自定义类型"""
@@ -182,17 +182,21 @@ class PyCodeHelper:
             if field.startswith("repeated"):
                 _, _type, _name, *_ = field.split()
                 _type_text = _get_type(_type)
-                ret_params.append(
-                    "{}: List[{}] = {}()".format(_name, _type_text, "list")
-                )
+                if function_args:
+                    _str = "{}: List[{}] = None".format(_name, _type_text)
+                else:
+                    _str = "{}: List[{}] = {}()".format(_name, _type_text, "list")
+                ret_params.append(_str)
             elif field.startswith("map"):
                 field = field.replace("<", " ").replace(",", " ").replace(">", " ")
                 _, _type_key, _type_value, _name, *_ = field.split()
                 _key = _get_type(_type_key)
                 _value = _get_type(_type_value)
-                ret_params.append(
-                    "{}: Dict[{}, {}] = {}()".format(_name, _key, _value, "dict")
-                )
+                if function_args:
+                    _str = "{}: Dict[{}, {}] = None".format(_name, _key, _value)
+                else:
+                    _str = "{}: Dict[{}, {}] = {}()".format(_name, _key, _value, "dict")
+                ret_params.append(_str)
             elif field:
                 _type, _name, *_ = field.split()
                 _type_text = _get_type(_type)
@@ -211,7 +215,7 @@ class PyCodeHelper:
             _re_result = re.findall("message {}[^}}]*}}".format(req), proto_body)
             message_text = _re_result[0]
             # 获取函数输入输出
-            req, _ = self._get_struct_from_proto(message_text)
+            req, _ = self._get_struct_from_proto(message_text, function_args=True)
         if self._use_for == "client":
             func_code = """@servicer.remote_method({})\ndef {}({}) -> {}:\n    ...  # pragma: no cover\n"""
         else:
