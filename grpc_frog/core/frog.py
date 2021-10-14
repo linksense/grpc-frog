@@ -37,7 +37,7 @@ class Frog:
 
     def remote_method(self, servicer_name="default", *args, **kwargs):
         """声明这是一个远程调用函数"""
-        return self.servicer_map["servicer_name"].remote_method(*args, **kwargs)
+        return self.servicer_map[servicer_name].remote_method(*args, **kwargs)
 
     def model(self, *args, **kwargs):
         """
@@ -52,7 +52,7 @@ class Frog:
 
         return wrapper
 
-    def bind_servicer(self, server: grpc.server, frog_servicer):
+    def bind_servicer(self, server: grpc.server, frog_servicer: Servicer) -> None:
         """
         装载servicer
 
@@ -60,7 +60,7 @@ class Frog:
         :param frog_servicer: grpc_frog.servicer对象
         :return: grpc.server对象
         """
-        pb2_grpc = frog_servicer.get_pb2_grpc()
+        pb2_grpc = frog_servicer.get_pb2_grpc(frog_servicer.proto_dir)
         # bp_grpc get servicer
         servicer_name = "{}Servicer".format(frog_servicer.name)
         servicer_grpc = getattr(pb2_grpc, servicer_name)
@@ -71,7 +71,6 @@ class Frog:
         add_func_name = "add_{}_to_server".format(servicer_name)
         add_func = getattr(pb2_grpc, add_func_name)
         add_func(servicer_grpc, server)
-        return server
 
     def clear_proto_cache(self):
         """清空 .proto 和 pb2 文件缓存"""

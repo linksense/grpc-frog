@@ -7,6 +7,7 @@ import importlib
 import inspect
 import os
 import re
+import sys
 
 import grpc
 
@@ -60,12 +61,15 @@ class Servicer:
         return pb2
 
     @functools.lru_cache()
-    def get_pb2_grpc(self):
+    def get_pb2_grpc(self, proto_dir: str = None):
         """ 获取当前servicer的pb2_grpc对象 """
+        proto_dir = proto_dir or self.proto_dir
+        sys.path.append(self.proto_dir)
         file_path = os.path.join(self.proto_dir, "{}_pb2_grpc.py".format(self.name))
         spec = importlib.util.spec_from_file_location(self.name, file_path)
         pb2_grpc = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(pb2_grpc)
+        sys.path.remove(self.proto_dir)
         return pb2_grpc
 
     def register_method(self, func, response_model=None, request_model=None):

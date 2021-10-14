@@ -7,12 +7,14 @@ import datetime
 import os
 from typing import Dict, List
 
+import grpc
 from pydantic import BaseModel
 
 from grpc_frog import frog
 from grpc_frog.core.servicer import Servicer
 
-service_d = Servicer("hello_d", proto_dir=os.path.dirname(__file__))
+proto_dir = os.path.join(os.path.dirname(__file__), "proto")
+service_d = Servicer("hello_d", proto_dir=proto_dir)
 frog.add_servicer(service_d)
 
 
@@ -76,9 +78,39 @@ def echo_with_increment_one(
     return res
 
 
-def generate_proto():
+def generate_proto() -> str:
+    """生成proto文件"""
     from grpc_frog import generate_proto_file
 
-    generate_proto_file(
-        servicer_name=service_d.name, save_dir=os.path.dirname(__file__)
+    os.makedirs(proto_dir, exist_ok=True)
+    generate_proto_file(servicer_name=service_d.name, save_dir=proto_dir)
+    print("proto dir ok")
+    return proto_dir
+
+
+def run_grpc_server_daemon():
+    """启动server"""
+    from concurrent import futures
+
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=2),
     )
+    frog.bind_servicer(server, service_d)
+    server.add_insecure_port("127.0.0.1:50055")
+    server.start()
+    print("server start", frog.servicer_map[service_d.name].bind_method_map)
+    server.wait_for_termination()
+
+
+def make_client():
+    from grpc_frog import generate_py_code
+
+    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hello_c")
+    os.makedirs(path, exist_ok=True)
+    generate_py_code(path, proto_dir=proto_dir)
+
+
+if __name__ == "__main__":
+    generate_proto()
+    make_client()
+    run_grpc_server_daemon()

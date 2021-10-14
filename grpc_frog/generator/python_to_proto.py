@@ -4,10 +4,9 @@
 # Copyright 2021 LinkSense Technology CO,. Ltd
 import os
 
-from grpc_tools import protoc
-
 from grpc_frog import Servicer, frog
 from grpc_frog.core import log, proto_type_recorder
+from grpc_frog.generator.pb_fiile_util import generate_pb2_file
 
 proto_text = """syntax = "proto3";\n\npackage {};\n\nimport "google/protobuf/timestamp.proto";\n\n{}\n\n{}"""
 
@@ -37,9 +36,8 @@ class ProtoHelper:
             if not servicer.bind_method_map:
                 log.info("{} has no bind method".format(servicer.name))
                 continue
-            proto_file = os.path.join(
-                servicer.proto_dir, "{}.proto".format(servicer.name)
-            )
+            out_dir = self._save_dir or servicer.proto_dir
+            proto_file = os.path.join(out_dir, "{}.proto".format(servicer.name))
             self._generate_proto_file(servicer, proto_file)
 
     def _generate_proto_file(self, servicer: Servicer, proto_file: str):
@@ -70,52 +68,22 @@ class ProtoHelper:
         with open(proto_file, "w", encoding="utf8") as f:
             f.write(proto_body)
         # 生成pb2文件
-        self._generate_pb2_file(proto_file)
-
-    def _generate_pb2_file(self, proto_file: str) -> None:
-        """生成pb2文件"""
-        # copy google dir
-        proto_dir = os.path.dirname(proto_file)
-        out_dir = self._save_dir or proto_dir
-        args = (
-            "grpc_tools.protoc",
-            "-I" + proto_dir,
-            "--python_out=" + out_dir,
-            "--grpc_python_out=" + out_dir,
-            proto_file,
-        )
-        protoc_result = protoc.main(args)
-        if protoc_result == 1:
-            message = "编译{}下的文件时产生了一个错误args:\n" \
-                      "python -m grpc.tools.protoc " + " ".join(args)
-            raise SyntaxError(message)
-        # fix pb2 file
-        base_name = os.path.basename(proto_file).replace(".proto", "")
-        pb2_grpc_file = os.path.join(out_dir, base_name + "_pb2_grpc.py")
-        self._fix_pb2_grpc_file(base_name, pb2_grpc_file)
-
-    def _fix_pb2_grpc_file(self, base_name, pb2_grpc_file):
-        file_data = open(pb2_grpc_file, "r", encoding="utf8").read()
-        file_data = file_data.replace(
-            "\nimport {}".format(base_name),
-            "\n# todo need changed to your proto"
-            "\nfrom {} import {}".format(self._proto_location, base_name),
-        )
-        with open(pb2_grpc_file, "w", encoding="utf8") as f:
-            f.write(file_data)
+        generate_pb2_file(proto_file)
 
     def _get_service_body(self, servicer: Servicer) -> str:
         """获取method的proto形式"""
         ret = []
         for method in servicer.bind_method_map.values():
-            "rpc {method_name}({request_name}) returns ({response_name}) {{}};".format(
+            rpc_body = "rpc {method_name}({request_name}) returns ({response_name}) {{}};".format(
                 method_name=method.name,
                 request_name=method.request_name,
                 response_name=method.response_name,
             )
+            ret.append(rpc_body)
         proto_str = "service {name} {{\n  {method_str}\n}}".format(
             name=servicer.name, method_str="\n  ".join(ret)
         )
+
         return proto_str
 
 

@@ -6,3 +6,4 @@ fire
 kazoo
 python-dateutil
 protobuf
+black

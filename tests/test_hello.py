@@ -8,10 +8,8 @@ import socket
 import time
 from typing import Dict, Union
 
-import grpc
-
-from grpc_frog import frog, generate_proto_file, generate_py_code
-from tests.hello_d.interface import ResponseModel, echo_with_increment_one, service_d
+from grpc_frog import frog
+from tests.hello_d.interface import ResponseModel, echo_with_increment_one
 
 
 def _is_port_used(ip, port):
@@ -25,18 +23,6 @@ def _is_port_used(ip, port):
     return True
 
 
-def run_grpc_server_daemon():
-    from concurrent import futures
-
-    server = grpc.server(
-        futures.ThreadPoolExecutor(max_workers=2),
-    )
-    frog.bind_servicer(server, service_d)
-    server.add_insecure_port("{}:{}".format("127.0.0.1", 50055))
-    server.start()
-    server.wait_for_termination()
-
-
 class TestHello:
     server_daemon = None
     server_name = "test_hello"
@@ -45,9 +31,15 @@ class TestHello:
     def setup_class(cls):
         # flake8: noqa
         # noinspection PyUnresolvedReferences
-        from tests.hello_d.interface import TDemoModel, echo_with_increment_one
+        from tests.hello_d.interface import (
+            TDemoModel,
+            echo_with_increment_one,
+            generate_proto,
+            make_client,
+            run_grpc_server_daemon,
+        )
 
-        generate_proto_file()
+        generate_proto()
 
         if _is_port_used("127.0.0.1", 50055):
             raise ValueError("当前端(127.0.0.1, 50055)口被占用，不能启动测试服务")
@@ -58,22 +50,17 @@ class TestHello:
         time.sleep(2)
 
         # 生成Client
-        path = os.path.join(os.path.dirname(__file__), "hello_c")
-        generate_py_code(path)
+        make_client()
 
     @classmethod
     def teardown_class(cls):
         cls.server_daemon.terminate()
+        os.remove(os.path.join(frog.servicer_map["hello_d"].proto_dir, "hello_d.proto"))
         os.remove(
-            os.path.join(frog.servicer_map["grpc_test"].proto_dir, "grpc_test.proto")
+            os.path.join(frog.servicer_map["hello_d"].proto_dir, "hello_d_pb2.py")
         )
         os.remove(
-            os.path.join(frog.servicer_map["grpc_test"].proto_dir, "grpc_test_pb2.py")
-        )
-        os.remove(
-            os.path.join(
-                frog.servicer_map["grpc_test"].proto_dir, "grpc_test_pb2_grpc.py"
-            )
+            os.path.join(frog.servicer_map["hello_d"].proto_dir, "hello_d_pb2_grpc.py")
         )
 
     @staticmethod
@@ -108,14 +95,13 @@ class TestHello:
 
     def test_server_daemon(self):
         """测试生成proto"""
-        from grpc_frog import proto
 
-        frog.servicer_map["grpc_test"].proto_dir = os.path.dirname(proto.__file__)
-        pb2 = frog.servicer_map["grpc_test"].get_pb2()
-        pb2_grpc = frog.servicer_map["grpc_test"].get_pb2_grpc()
-        assert hasattr(pb2_grpc, "grpc__test__pb2")
-        assert hasattr(pb2_grpc, "grpc_testStub")
-        assert hasattr(pb2_grpc, "grpc_testServicer")
+        # frog.servicer_map["hello_d"].proto_dir = os.path.dirname(proto.__file__)
+        pb2 = frog.servicer_map["hello_d"].get_pb2()
+        pb2_grpc = frog.servicer_map["hello_d"].get_pb2_grpc()
+        assert hasattr(pb2_grpc, "hello__d__pb2")
+        assert hasattr(pb2_grpc, "hello_dStub")
+        assert hasattr(pb2_grpc, "hello_dServicer")
         assert hasattr(pb2, "TDemoModel")
         assert hasattr(pb2, "ResponseModel")
         assert hasattr(pb2, "echo_with_increment_one_request")
@@ -126,16 +112,14 @@ class TestHello:
 
     def test_generate_client_code(self):
         # 验证语法正确
-        exec("from tests.hello_c.model_grpc_test import *")
-        exec("from tests.hello_c.servicer_grpc_test import *")
+        exec("from tests.hello_c.model_hello_d import *")
         # Client init 后发送请求
-        import tests.hello_c.proto as proto
-
+        proto_dir = os.path.join(os.path.dirname(__file__), "hello_c", "proto")
         frog.client_init(
-            "grpc://127.0.0.1:50055/grpc_test",
-            proto_dir=os.path.dirname(proto.__file__),
+            "grpc://127.0.0.1:50055/hello_d",
+            proto_dir=proto_dir,
         )
-        from tests.hello_c.servicer_grpc_test import echo_with_increment_one
+        from tests.hello_c.servicer_hello_d import echo_with_increment_one
 
         args = self._get_default_args()
         # 测试直接调用函数echo_with_increment_one
@@ -149,10 +133,10 @@ class TestHello:
         if not _is_port_used("192.168.0.68", 2181):
             return
         from grpc_frog.zk_utils import register_zk
-        from tests.hello_c.servicer_grpc_test import echo_with_increment_one
+        from tests.hello_c.servicer_hello_d import echo_with_increment_one
 
-        register_zk("127.0.0.1", 50055, "grpc_test", "192.168.0.68", 2181)
-        frog.client_init("zookeeper://192.168.0.68:2181/grpc_test")
+        register_zk("127.0.0.1", 50055, "hello_d", "192.168.0.68", 2181)
+        frog.client_init("zookeeper://192.168.0.68:2181/hello_d")
         res = echo_with_increment_one()
         # BaseModel.dict 会导致
         tmp = res.dict()
