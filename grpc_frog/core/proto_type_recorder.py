@@ -7,7 +7,7 @@
 """
 import datetime
 from collections import defaultdict
-from typing import Union
+from typing import Type, Union
 
 import flask_sqlalchemy
 from google.protobuf.message import Message
@@ -26,7 +26,9 @@ proto_base_type = {
 # python类型对应proto文件中名字
 _py_name_2_proto_name_map = proto_base_type.copy()  # py_type : str
 # 将一个python类型的属性转换成一个字典
-message_collections = defaultdict(dict)  # {a:int,b:str,c:list[str],d:{str,int},f:class_a}}
+message_collections = defaultdict(
+    dict
+)  # {a:int,b:str,c:list[str],d:{str,int},f:class_a}}
 
 # 将自CMessage的数据转换成python对象
 _converter = {
@@ -53,7 +55,9 @@ converter_reverse = {
     str: default_converter_reverse,
     bool: default_converter_reverse,
     float: default_converter_reverse,
-    datetime.datetime: lambda message, name, value: getattr(message, name).FromDatetime(value),
+    datetime.datetime: lambda message, name, value: getattr(message, name).FromDatetime(
+        value
+    ),
 }
 
 
@@ -69,10 +73,14 @@ def _converter_py_type(py_type, value):
 
             if isinstance(attr_type, list):
                 # eg. attr_type == [float]
+                if getattr(obj, attr_name) is None:
+                    setattr(obj, attr_name, list())
                 for _v in message_value:
                     getattr(obj, attr_name).append(_converter_py_type(attr_type[0], _v))
             elif isinstance(attr_type, dict):
                 # eg. attr_type = {str, str} _k_type = str, _v_type =str
+                if getattr(obj, attr_name) is None:
+                    setattr(obj, attr_name, dict())
                 (_k_type, _v_type), *_ = list(attr_type.items())
                 for _k, _v in message_value.items():
                     key_obj = _converter_py_type(_k_type, _k)
@@ -99,13 +107,15 @@ def converter_proto(py_type, message, name, value):
     return message
 
 
-def translate_2_proto_field(type_field):
+def translate_2_proto_field(type_field: Type):
     """将py_type参数转换成proto字符串"""
     if isinstance(type_field, list):
         return "repeated {}".format(translate_2_proto_field(type_field[0]))
     elif isinstance(type_field, dict):
         (k, v), *_ = list(type_field.items())
-        return "map<{}, {}>".format(translate_2_proto_field(k), translate_2_proto_field(v))
+        return "map<{}, {}>".format(
+            translate_2_proto_field(k), translate_2_proto_field(v)
+        )
     else:
         return _py_name_2_proto_name_map[type_field]
 
@@ -122,7 +132,9 @@ def translate_2_proto_message(py_type: str):
     return ret
 
 
-def register_py_type(model, message_name=None, to_dict_method="dict", from_orm_method="from_orm"):
+def register_py_type(
+    model, message_name=None, to_dict_method="dict", from_orm_method="from_orm"
+):
     """将一个model注册到frog中
     将sqlalchemy model转换成proto文件并
     需要实现 model与dict 之间的抓换 dict/from_obj
@@ -134,7 +146,11 @@ def register_py_type(model, message_name=None, to_dict_method="dict", from_orm_m
         raise NotImplementedError("请实现{}方法，将dict转换为model".format(from_orm_method))
     # lk特制
     old_model = None
-    if hasattr(model, "__abstract__") and model.__abstract__ and hasattr(model, "switch_table"):
+    if (
+        hasattr(model, "__abstract__")
+        and model.__abstract__
+        and hasattr(model, "switch_table")
+    ):
         old_model = model
         model = model.switch_table(None)
 
@@ -163,7 +179,9 @@ def get_base_type(type_list):
         elif isinstance(py_type, dict):
             ret_type_list.update(get_base_type(py_type.values()))
             continue
-        elif str(py_type).startswith("typing.List[") or str(py_type).startswith("typing.Dict["):
+        elif str(py_type).startswith("typing.List[") or str(py_type).startswith(
+            "typing.Dict["
+        ):
             ret_type_list.update(get_base_type(py_type.__args__))
             continue
 
@@ -189,8 +207,7 @@ def register_by_dict(struct, proto_name):
         def from_orm(cls, data):
             return cls(data)
 
-    new_model = type(proto_name, (base_model,),
-                     {"__annotations__": struct})
+    new_model = type(proto_name, (base_model,), {"__annotations__": struct})
     register_py_type(new_model)
     return new_model
 
@@ -238,7 +255,9 @@ def message_to_dict(message_obj, struct_dict: dict):
     return return_dict
 
 
-def dict_to_message(return_dict: Union[dict, BaseModel], message: Message, model, servicer):
+def dict_to_message(
+    return_dict: Union[dict, BaseModel], message: Message, model, servicer
+):
     """ py_type转换成CMessage """
     if not isinstance(return_dict, dict) and not hasattr(return_dict, "dict"):
         raise TypeError("{}对象实现错误 没有dict方法，请检查输入".format(type(return_dict)))

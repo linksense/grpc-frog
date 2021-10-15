@@ -50,6 +50,15 @@ clean-test: ## remove test and coverage artifacts
 
 lint: ## check style with flake8
 	flake8 grpc_frog tests
+	black grpc_frog tests --check
+	isort grpc_frog tests --check-only --profile black
+
+format: ## format python code
+	black grpc_frog tests
+	isort grpc_frog tests --profile black
+	flake8 grpc_frog tests
+	black grpc_frog tests --check
+	isort grpc_frog tests --check-only --profile black
 
 test: ## run tests quickly with the default Python
 	pytest
@@ -59,8 +68,9 @@ coverage: ## check code coverage quickly with the default Python
 	coverage combine
 	coverage report -m
 	coverage html
+	# $(BROWSER) htmlcov/index.html
 
-check: install lint clean-test coverage clean ## run all import before commit
+check: install lint coverage clean-test ## run all import before commit
 
 docs: ## generate Sphinx HTML documentation, including API docs
 	rm -f docs/grpc_frog.rst

@@ -7,8 +7,9 @@ import re
 from typing import Dict
 
 import grpc
-from grpc_frog import proto_type_recorder
-from grpc_frog.servicer import Servicer
+
+from grpc_frog.core import proto_type_recorder
+from grpc_frog.core.servicer import Servicer
 
 
 class Frog:
@@ -17,6 +18,7 @@ class Frog:
 
     管理
     """
+
     servicer_map: Dict[str, Servicer] = dict()  # servicer_name : servicer
     _uri_map = {}  # servicer_name : uri
     channel_options = []  # grpc channel_options
@@ -35,7 +37,7 @@ class Frog:
 
     def remote_method(self, servicer_name="default", *args, **kwargs):
         """声明这是一个远程调用函数"""
-        return self.servicer_map["servicer_name"].remote_method(*args, **kwargs)
+        return self.servicer_map[servicer_name].remote_method(*args, **kwargs)
 
     def model(self, *args, **kwargs):
         """
@@ -50,7 +52,7 @@ class Frog:
 
         return wrapper
 
-    def bind_servicer(self, server: grpc.server, frog_servicer):
+    def bind_servicer(self, server: grpc.server, frog_servicer: Servicer) -> None:
         """
         装载servicer
 
@@ -58,7 +60,7 @@ class Frog:
         :param frog_servicer: grpc_frog.servicer对象
         :return: grpc.server对象
         """
-        pb2_grpc = frog_servicer.get_pb2_grpc()
+        pb2_grpc = frog_servicer.get_pb2_grpc(frog_servicer.proto_dir)
         # bp_grpc get servicer
         servicer_name = "{}Servicer".format(frog_servicer.name)
         servicer_grpc = getattr(pb2_grpc, servicer_name)
@@ -69,11 +71,10 @@ class Frog:
         add_func_name = "add_{}_to_server".format(servicer_name)
         add_func = getattr(pb2_grpc, add_func_name)
         add_func(servicer_grpc, server)
-        return server
 
     def clear_proto_cache(self):
         """清空 .proto 和 pb2 文件缓存"""
-        dir_path = os.path.join(os.path.dirname(__file__), "proto")
+        dir_path = os.path.join(os.path.dirname(__file__), "../proto")
         file_list = os.listdir(dir_path)
         for i in file_list:
             if (i.endswith(".py") or i.endswith(".proto")) and (i != "__init__.py"):
@@ -87,10 +88,16 @@ class Frog:
         """
         match_obj = re.match(r"(\w*)://([\w.]*):(\d*)/?(\w*)", uri)
         if match_obj is None:
-            raise ValueError("{}错误 e.g zookeeper://127.0.0.1:5000/servicer_name".format(uri))
+            raise ValueError(
+                "{}错误 e.g zookeeper://127.0.0.1:5000/servicer_name".format(uri)
+            )
         *_, servicer_name = match_obj.groups()
         if servicer_name not in self.servicer_map.keys():
-            raise ValueError("{}未在frog中注册,当前已组测服务为{}".format(servicer_name or "None", self.servicer_map.keys()))
+            raise ValueError(
+                "{}未在frog中注册,当前已组测服务为{}".format(
+                    servicer_name or "None", self.servicer_map.keys()
+                )
+            )
         self._uri_map[servicer_name] = uri
         self.servicer_map[servicer_name].client_init(uri, proto_dir)
 
@@ -109,14 +116,16 @@ class Frog:
         self.channel_options += options
 
     def get_channel_options(self):
-        grpc_max_length = os.environ.get('grpc_frog__grpc_max_length') or 512 * 1024 * 1024
+        grpc_max_length = (
+            os.environ.get("grpc_frog__grpc_max_length") or 512 * 1024 * 1024
+        )
         options = [
-            ('grpc.max_send_message_length', grpc_max_length),
-            ('grpc.max_receive_message_length', grpc_max_length),
+            ("grpc.max_send_message_length", grpc_max_length),
+            ("grpc.max_receive_message_length", grpc_max_length),
         ]
         return options + self.channel_options
 
 
 frog = Frog()
 
-__all__ = ["frog"]
+__all__ = [frog]

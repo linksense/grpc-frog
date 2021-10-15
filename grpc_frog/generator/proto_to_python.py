@@ -2,61 +2,66 @@
 # encoding: utf-8
 # Created by zza on 2021/2/19 17:22
 # Copyright 2021 LinkSense Technology CO,. Ltd
-
+"""将proto转换成python model"""
 import os
 import re
-from distutils.dir_util import copy_tree
+from shutil import copyfile
+from typing import Dict, Iterator, List, Tuple
 
 import grpc_frog.template.model as model
-from grpc_frog import proto_type_recorder
+from grpc_frog.core import log, proto_type_recorder
+from grpc_frog.core.proto_type_recorder import proto_base_type
+from grpc_frog.generator.pb_fiile_util import generate_pb2_file
 
 _servicer_text = """
 import os
 from typing import List, Dict
 from .model_{proto_name} import {models}
 from grpc_frog import Servicer, frog
-from . import proto
 
-servicer = Servicer("{proto_name}", proto_dir=os.path.dirname(proto.__file__))
+
+proto_dir = os.path.join(os.path.dirname(__file__), "proto")
+servicer = Servicer("{proto_name}", proto_dir=proto_dir)
 frog.add_servicer(servicer)
 
 
 {func_code}
+def init_client() -> None:  # pragma: no cover
+    frog.client_init("grpc://127.0.0.1:50065", proto_dir=proto_dir)
 
-# client
-# frog.client_init("grpc://127.0.0.1:50065", proto_dir=os.path.join(r"{package_dir}", "proto"))
 
-# server
-# frog.bind_servicer(server, proto_dir=os.path.join(r"{package_dir}", "proto"))
+def init_server() -> None:  # pragma: no cover
+    import grpc
+    from concurrent import futures
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=2))
+    frog.bind_servicer(server, proto_dir=proto_dir)
 """
 
 
 class PyCodeHelper:
-    mapping = {
-        'int64': 'int',
-        'string': 'str',
-        'bool': 'bool',
-        'float': 'float',
-        "google.protobuf.Timestamp": "datetime.datetime",
-    }
+    mapping = {v: k for k, v in proto_base_type.items()}
 
-    def __init__(self, package_dir, pb_file_dir, use_for="client"):
+    def __init__(
+        self,
+        target_dir: str,
+        proto_dir: str,
+        use_for: str = "client",
+    ):
         """python生成助手
-        :param package_dir: 生成的代码地址
-        :param pb_file_dir: 目前pb.py和pb2_grpc的存放地址
+        :param target_dir: 生成的代码地址
+        :param proto_dir: 目前pb.py和pb2_grpc的存放地址
         :param use_for: 用于生成客户端或者服务端代码
         """
-        if not os.path.isdir(package_dir):
-            raise ValueError("{} is not dictionary".format(package_dir))
-        if not os.path.isdir(pb_file_dir):
-            raise ValueError("{} is not dictionary".format(pb_file_dir))
+        if not os.path.isdir(target_dir):
+            raise ValueError("{} is not dictionary".format(target_dir))
+
         if use_for not in ("client", "server"):
             raise ValueError("use_for should be client or server")
 
         self._use_for = use_for
 
-        self._package_dir = package_dir
-        self._pb_file_dir = pb_file_dir
+        self._target_dir = target_dir
+        self._pb_file_dir = proto_dir
 
         self._proto_files = []
         self._pb2_files = []
@@ -64,90 +69,109 @@ class PyCodeHelper:
 
         for file_name in os.listdir(self._pb_file_dir):
             if file_name.endswith(".proto"):
-                self._proto_files.append(file_name[:- len(".proto")])
-            elif file_name.endswith("pb2.py"):
-                self._pb2_files.append(file_name[:- len("pb2.py") - 1])
-            elif file_name.endswith("pb2_grpc.py"):
-                self._pb2_grpc_files.append(file_name[:- len("pb2_grpc.py") - 1])
+                self._proto_files.append(file_name[: -len(".proto")])
 
-    def generate_code(self):
+    def generate_code(self) -> None:
         """生成C端"""
         # 复制proto文件夹
-        copy_tree(self._pb_file_dir, os.path.join(self._package_dir, "proto"))
+        dst_dir = os.path.join(self._target_dir, "proto")
+        os.makedirs(dst_dir, exist_ok=True)
         for proto_name in self._proto_files:
-            print("start proto file:", proto_name)
+            log.info("开始处理{}.proto".format(proto_name))
+            dst_proto_file = self._make_pb2_file(dst_dir, proto_name)
             # 生成model文件
             models = self._generate_models_file(proto_name)
             # 生成servicer文件
-            self._generate_service_file(proto_name, models)
-        return
+            self._generate_service_file(proto_name, dst_proto_file, models)
+        log.info("在{}生成代码完成".format(self._target_dir))
 
-    def _generate_models_file(self, proto_name):
+    def _make_pb2_file(self, dst_dir, proto_name):
+        src = os.path.join(self._pb_file_dir, proto_name + ".proto")
+        dst_proto_file = os.path.join(dst_dir, proto_name + ".proto")
+        copyfile(src, dst_proto_file)
+        log.info("start proto file:", proto_name)
+        generate_pb2_file(dst_proto_file)
+        return dst_proto_file
+
+    def _generate_models_file(self, proto_name: str) -> Iterator[str]:
         """生成model文件"""
         modules = {}
         relationship = dict()  # 类名 : [依赖类1,依赖类2]
-        with open(os.path.join(self._pb_file_dir, "{}.proto".format(proto_name)), 'r', encoding='utf8') as f:
+        # 获取proto内容
+        proto_file = os.path.join(self._pb_file_dir, "{}.proto".format(proto_name))
+        with open(proto_file, "r", encoding="utf8") as f:
             proto_file = f.read()
+        # 解析model
         message_text = re.findall(r"message (\w*) ({[^\}]*})", proto_file)
-        for name, fields_code in message_text:
-            if name[0].islower():
+        for _name, _fields_code in message_text:
+            if _name[0].islower():
                 continue
-            field_codes, unknown_py_type = self._get_struct_from_proto(fields_code)
-            modules[name] = field_codes
-            relationship[name] = unknown_py_type
-
-        ret = open(model.__file__, "r", encoding="utf8").read()
+            field_codes, unknown_py_type = self._get_struct_from_proto(_fields_code)
+            modules[_name] = field_codes
+            relationship[_name] = unknown_py_type
+        # 判断依赖关系
+        model_code = open(model.__file__, "r", encoding="utf8").read()
         relationship = list(relationship.items())
         while len(relationship) != 0:
-            name, required = relationship.pop(0)
+            _name, required = relationship.pop(0)
             if not required:
-                ret += "\n\n@frog.model()\nclass {}(BaseModel):\n    {}\n".format(name, "\n    ".join(modules[name]))
-                for _, _required in relationship:
-                    if name in _required:
-                        _required.pop()
+                model_code += _get_no_required_model_code(_name, modules, relationship)
             else:
-                relationship.append((name, required))
+                relationship.append((_name, required))
         # 输出
-        with open(os.path.join(self._package_dir, "model_{}.py".format(proto_name)), "w", encoding="utf8") as f:
-            f.write(ret)
-        return modules.keys()
+        model_file = os.path.join(self._target_dir, "model_{}.py".format(proto_name))
+        format_code = _format_code(model_code)
+        with open(model_file, "w", encoding="utf8") as f:
+            f.write(format_code)
+        return list(modules.keys())
 
-    def _generate_service_file(self, proto_name, models=[]):
+    def _generate_service_file(
+        self, proto_name: str, dst_proto_file: str, models: Iterator[str]
+    ):
         """生成接口文件"""
-        with open(os.path.join(self._pb_file_dir, "{}.proto".format(proto_name)), 'r', encoding='utf8') as f:
+        with open(dst_proto_file, "r", encoding="utf8") as f:
             proto_body = f.read()
-        func_list = re.findall(r"rpc (\w*)\((\w*)\) returns \((\w*)\) \{\};", proto_body)
-
+        _rpc_re = r"rpc (\w*)\((\w*)\) returns \((\w*)\) \{\};"
+        func_list = re.findall(_rpc_re, proto_body)
+        # 获得函数代码
         func_codes = ""
-        for func_name, req, resp in func_list:
-            if "_" in req:
-                message_text = re.findall("message {}[^}}]*}}".format(req), proto_body)[0]
-                req, _ = self._get_struct_from_proto(message_text)
-            func_code = self._get_func_code(func_name, req, resp)
-            func_codes += func_code + "\n\n"
-
-        out_text = _servicer_text.format(proto_name=proto_name, models=", ".join(models) or "*",
-                                         func_code=func_codes, package_dir=self._package_dir)
-
+        for _func_name, _req, _resp in func_list:
+            # 转换成函数代码
+            _func_code = self._get_func_code(_func_name, _req, _resp, proto_body)
+            func_codes += _func_code + "\n\n"
+        # 整合成文件
+        out_text = _servicer_text.format(
+            proto_name=proto_name,
+            models=", ".join(models) or "*",
+            func_code=func_codes,
+            package_dir=self._target_dir,
+        )
         # 输出
-        out_file = os.path.join(self._package_dir, "servicer_{}.py".format(proto_name))
+        out_file = os.path.join(self._target_dir, "servicer_{}.py".format(proto_name))
+        format_code = _format_code(out_text)
         with open(out_file, "w", encoding="utf8") as f:
-            f.write(out_text)
+            f.write(format_code)
         return
 
-    def _get_struct_from_proto(self, proto):
+    def _get_struct_from_proto(
+        self, proto: str, function_args: bool = False
+    ) -> Tuple[List[str], List[str]]:
         """
         将proto文件的message
         field
         转换成python代码
         """
         unknown_py_type = []
-        field_list = proto[proto.find("{") + 1:proto.rfind(";")].split(";")
+        field_list = proto[proto.find("{") + 1 : proto.rfind(";")].split(";")
 
         def _get_type(message_type):
             """获取CMessages对应的python类型，并记录自定义类型"""
             if message_type in self.mapping:
-                return self.mapping[message_type]
+                class_obj = self.mapping[message_type]
+                ret: str = class_obj.__module__ + "." + class_obj.__qualname__
+                if ret.startswith("builtins."):
+                    ret = ret.replace("builtins.", "")
+                return ret
             else:
                 unknown_py_type.append(message_type)
                 return message_type
@@ -158,23 +182,40 @@ class PyCodeHelper:
             if field.startswith("repeated"):
                 _, _type, _name, *_ = field.split()
                 _type_text = _get_type(_type)
-                ret_params.append("{}: List[{}] = {}()".format(_name, _type_text, "list"))
+                if function_args:
+                    _str = "{}: List[{}] = None".format(_name, _type_text)
+                else:
+                    _str = "{}: List[{}] = {}()".format(_name, _type_text, "list")
+                ret_params.append(_str)
             elif field.startswith("map"):
                 field = field.replace("<", " ").replace(",", " ").replace(">", " ")
                 _, _type_key, _type_value, _name, *_ = field.split()
                 _key = _get_type(_type_key)
                 _value = _get_type(_type_value)
-                ret_params.append("{}: Dict[{}, {}] = {}()".format(_name, _key, _value, "dict"))
+                if function_args:
+                    _str = "{}: Dict[{}, {}] = None".format(_name, _key, _value)
+                else:
+                    _str = "{}: Dict[{}, {}] = {}()".format(_name, _key, _value, "dict")
+                ret_params.append(_str)
             elif field:
                 _type, _name, *_ = field.split()
                 _type_text = _get_type(_type)
                 _default_value = proto_type_recorder.get_py_default_value(_type_text)
-                ret_params.append("{}: {} = {}()".format(_name, _type_text, _default_value))
+                ret_params.append(
+                    "{}: {} = {}()".format(_name, _type_text, _default_value)
+                )
             else:  # field = ""
-                print("[warming] 空 message: {} ".format(proto.replace("\n", '')))
+                print("[warming] 空 message: {} ".format(proto.replace("\n", "")))
         return ret_params, unknown_py_type
 
-    def _get_func_code(self, func_name, req, resp):
+    def _get_func_code(
+        self, func_name: str, req: str, resp: str, proto_body: str
+    ) -> str:
+        if "_" in req:
+            _re_result = re.findall("message {}[^}}]*}}".format(req), proto_body)
+            message_text = _re_result[0]
+            # 获取函数输入输出
+            req, _ = self._get_struct_from_proto(message_text, function_args=True)
         if self._use_for == "client":
             func_code = """@servicer.remote_method({})\ndef {}({}) -> {}:\n    ...  # pragma: no cover\n"""
         else:
@@ -182,8 +223,36 @@ class PyCodeHelper:
         return func_code.format(resp, func_name, ", ".join(req), resp)
 
 
-def generate_py_code(package_dir, proto_dir=None, use_for="client"):
+def _get_no_required_model_code(
+    _name: str, modules: Dict[str, List[str]], relationship: List[Tuple[str, List[str]]]
+):
+    model_template = "\n\n@frog.model()\nclass {}(BaseModel):\n    {}\n"
+    ret = model_template.format(_name, "\n    ".join(modules[_name]))
+    # 依赖关系图中去除已写入的model
+    for _, _required in relationship:
+        if _name in _required:
+            _required.pop()
+    return ret
+
+
+def _format_code(code: str) -> str:
+    """使用black插件格式化python代码"""
+    import black
+
+    mode = black.Mode(
+        target_versions={black.TargetVersion.PY36},
+        line_length=120,
+        string_normalization=False,
+        is_pyi=False,
+    )
+    format_ret = black.format_str(code, mode=mode)
+    return format_ret
+
+
+def generate_py_code(
+    package_dir: str, proto_dir: str = None, use_for: str = "client"
+) -> None:
     """生成python文件"""
     if proto_dir is None:
-        proto_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "proto")
+        proto_dir = os.path.join(package_dir, "proto")
     PyCodeHelper(package_dir, proto_dir, use_for).generate_code()

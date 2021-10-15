@@ -36,8 +36,8 @@ setup(
     package_data={"": ["proto/google/*/*.proto", ]},
     entry_points={
         'console_scripts': [
-            'grpc-frog=grpc_frog.__main__:cli_run',
-            'grpc_frog=grpc_frog.__main__:cli_run',
+            'grpc-frog=grpc_frog.__main__:entry_point',
+            'grpc_frog=grpc_frog.__main__:entry_point',
         ],
     },
     include_package_data=True,

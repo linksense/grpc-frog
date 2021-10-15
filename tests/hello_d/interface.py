@@ -2,22 +2,20 @@
 # encoding: utf-8
 # Created by zza on 2021/1/27 11:20
 # Copyright 2021 LinkSense Technology CO,. Ltd
+"""测试类"""
+import datetime
 import os
 from typing import Dict, List
 
-from pydantic import BaseModel as _BaseModel
+import grpc
+from pydantic import BaseModel
 
 from grpc_frog import frog
-from grpc_frog.servicer import Servicer
+from grpc_frog.core.servicer import Servicer
 
-test_servicer = Servicer("grpc_test")
-frog.add_servicer(test_servicer)
-
-
-class BaseModel(_BaseModel):
-    class Config:
-        arbitrary_types_allowed = True
-        orm_mode = True
+proto_dir = os.path.join(os.path.dirname(__file__), "proto")
+service_d = Servicer("hello_d", proto_dir=proto_dir)
+frog.add_servicer(service_d)
 
 
 @frog.model()
@@ -27,6 +25,7 @@ class TDemoModel(BaseModel):
     str_field: str = ""
     list_int_field: List[int] = list()
     map_int_field: Dict[str, int] = dict()
+    create_time: datetime.datetime = datetime.datetime.now()
 
     def increment_one(self):
         self.int_field += 1
@@ -34,18 +33,8 @@ class TDemoModel(BaseModel):
         self.str_field += "1"
         self.list_int_field = [number + 1 for number in self.list_int_field]
 
-        for k, v in self.map_int_field.items():
-            self.map_int_field[k] = v + 1
-
-    @classmethod
-    def from_orm(cls, obj):
-        _obj = cls()
-        _obj.int_field = getattr(obj, "int_field", _obj.int_field)
-        _obj.float_field = getattr(obj, "float_field", _obj.float_field)
-        _obj.str_field = getattr(obj, "str_field", _obj.str_field)
-        _obj.list_int_field = getattr(obj, "list_int_field", _obj.list_int_field)
-        _obj.map_int_field = dict(getattr(obj, "map_int_field", _obj.map_int_field))
-        return _obj
+        for key, value in self.map_int_field.items():
+            self.map_int_field[key] = value + 1
 
 
 class ResponseModel(BaseModel):
@@ -56,7 +45,7 @@ class ResponseModel(BaseModel):
     map_model_e: Dict[str, int] = dict()
 
 
-@test_servicer.grpc_method()
+@service_d.grpc_method()
 def echo_with_increment_one_base(request_model: ResponseModel) -> ResponseModel:
     kwargs = request_model.dict()
     res: dict = echo_with_increment_one(**kwargs)
@@ -64,21 +53,64 @@ def echo_with_increment_one_base(request_model: ResponseModel) -> ResponseModel:
     return response_model
 
 
-@test_servicer.grpc_method(response_model=ResponseModel)
-def echo_with_increment_one(int_a: int, float_b: float, string_c: str,
-                            repeated_model_d: List[TDemoModel],
-                            map_model_e: Dict[str, int]) -> dict:
+@service_d.grpc_method(response_model=ResponseModel)
+def echo_with_increment_one(
+    int_a: int,
+    float_b: float,
+    string_c: str,
+    repeated_model_d: List[TDemoModel],
+    map_model_e: Dict[str, int],
+) -> dict:
     int_a += 1
     float_b += 1
     string_c += "1"
     for _model in repeated_model_d:
         _model.increment_one()
-    for k, v in map_model_e.items():
-        map_model_e[k] = v + 1
-    return {
+    for key, value in map_model_e.items():
+        map_model_e[key] = value + 1
+    res = {
         "int_a": int_a,
         "float_b": float_b,
         "string_c": string_c,
         "repeated_model_d": repeated_model_d,
         "map_model_e": map_model_e,
     }
+    return res
+
+
+def generate_proto() -> str:
+    """生成proto文件"""
+    from grpc_frog import generate_proto_file
+
+    os.makedirs(proto_dir, exist_ok=True)
+    generate_proto_file(servicer_name=service_d.name, save_dir=proto_dir)
+    print("proto dir ok")
+    return proto_dir
+
+
+def run_grpc_server_daemon():
+    """启动server"""
+    from concurrent import futures
+
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=2),
+    )
+    frog.bind_servicer(server, service_d)
+    server.add_insecure_port("127.0.0.1:50055")
+    server.start()
+    print("server start", frog.servicer_map[service_d.name].bind_method_map)
+    server.wait_for_termination()
+
+
+def make_client():
+    from grpc_frog import generate_py_code
+
+    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hello_c")
+    os.makedirs(path, exist_ok=True)
+    generate_py_code(path, proto_dir=proto_dir)
+
+
+if __name__ == "__main__":
+    generate_proto()
+    make_client()
+    run_grpc_server_daemon()

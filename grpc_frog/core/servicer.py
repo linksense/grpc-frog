@@ -7,12 +7,13 @@ import importlib
 import inspect
 import os
 import re
+import sys
 
 import grpc
 
 import grpc_frog.proto as proto
-from grpc_frog.context import context
-from grpc_frog.method import Method
+from grpc_frog.core.context import context
+from grpc_frog.core.method import Method
 from grpc_frog.zk_utils import DistributedChannel
 
 
@@ -60,12 +61,15 @@ class Servicer:
         return pb2
 
     @functools.lru_cache()
-    def get_pb2_grpc(self):
+    def get_pb2_grpc(self, proto_dir: str = None):
         """ 获取当前servicer的pb2_grpc对象 """
+        proto_dir = proto_dir or self.proto_dir
+        sys.path.append(self.proto_dir)
         file_path = os.path.join(self.proto_dir, "{}_pb2_grpc.py".format(self.name))
         spec = importlib.util.spec_from_file_location(self.name, file_path)
         pb2_grpc = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(pb2_grpc)
+        sys.path.remove(self.proto_dir)
         return pb2_grpc
 
     def register_method(self, func, response_model=None, request_model=None):
@@ -96,7 +100,9 @@ class Servicer:
                 # 第三层 处理Input Output
                 _m = self.bind_method_map[func.__name__]
                 # 将当前请求相关参数放入全局context
-                context.fill(_m, request, _m.request_model, _m.response_ret_2_message, _context)
+                context.fill(
+                    _m, request, _m.request_model, _m.response_ret_2_message, _context
+                )
                 # 将CMessage转成dict
                 kw_args = _m.request_message_2_dict(request)
                 # 去除外加的参数
@@ -141,9 +147,19 @@ class Servicer:
                 message = _m.request_ret_2_message(dict(**bound_values.arguments))
                 # 远程调用函数
 
-                with grpc.insecure_channel(self.channel_url, options=self.get_channel_options()) as channel:
-                    self._stub = getattr(self.get_pb2_grpc(), "{}Stub".format(self.name))(channel)
-                    context.fill(_m, message, _m.request_model, _m.response_ret_2_message, self._stub)
+                with grpc.insecure_channel(
+                    self.channel_url, options=self.get_channel_options()
+                ) as channel:
+                    self._stub = getattr(
+                        self.get_pb2_grpc(), "{}Stub".format(self.name)
+                    )(channel)
+                    context.fill(
+                        _m,
+                        message,
+                        _m.request_model,
+                        _m.response_ret_2_message,
+                        self._stub,
+                    )
                     remote_result = getattr(self._stub, func.__name__)(message)
                 # 将CMessage转换成dict 并装填到response_model中
                 res_obj = _m.response_model(**_m.response_message_2_dict(remote_result))
@@ -163,6 +179,7 @@ class Servicer:
         """获取 channel"""
         if self._driver is None:
             from grpc_frog import frog
+
             self.client_init(frog.get_servicer_uri(self.name))
 
         if self._driver == "grpc":
@@ -179,7 +196,7 @@ class Servicer:
         match_obj = re.match(r"(\w*)://([\w.]*):(\d*)/?(\w*)", uri)
         self._driver, ip, port, servicer_name = match_obj.groups()
         if self._driver == "grpc":
-            self._channel = '{}:{}'.format(ip, port)
+            self._channel = "{}:{}".format(ip, port)
         elif self._driver == "zookeeper":
             self._channel = DistributedChannel(ip, port, servicer_name)
         else:
@@ -191,4 +208,5 @@ class Servicer:
     @functools.lru_cache()
     def get_channel_options(self):
         from grpc_frog import frog
+
         return frog.get_channel_options()

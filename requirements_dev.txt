@@ -1,0 +1,18 @@
+pytest
+coverage
+mock
+pytest-timeout
+pytest-benchmark
+isort
+pytest_mock
+
+# Linting
+flake8
+flake8-black
+flake8-import-order
+flake8-bandit
+flake8-annotations
+flake8-builtins
+flake8-variables-names
+flake8-functions ; python_version > '3.6'
+flake8-expression-complexity

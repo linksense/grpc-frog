@@ -5,6 +5,7 @@
 """
 Context 当前上下文
 """
+import logging
 
 
 class Context:
@@ -46,3 +47,4 @@ class Context:
 
 context = Context()
 del Context
+log = logging.getLogger("grpc_frog")
